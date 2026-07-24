@@ -1,15 +1,14 @@
 # Biome plugin fixture
 
-This example reports `console.log()` and offers a safe `console.info()` rewrite.
+This plugin reports `console.log()` and offers a deliberately **unsafe** `console.info()` rewrite because changing logging methods can change observable behavior.
 
-From this directory, using the target project's Biome binary:
+The fixtures cover zero, one, and multiple arguments, a valid file, `lint/plugin` suppression, an excluded path, unsafe-write behavior, and idempotence. From this directory, using the target project's Biome binary:
 
 ```bash
-biome lint invalid.js
-biome lint valid.js
+biome lint invalid.js valid.js suppressed.js excluded.js
 cp invalid.js actual.js
-biome lint --write actual.js
-diff --strip-trailing-cr actual.js valid.js
+biome lint --write actual.js                 # leaves the unsafe fix unapplied
+biome lint --write --unsafe actual.js        # applies it
 ```
 
-Use the package-manager launcher appropriate to the project. The repository smoke test copies this fixture to a temporary directory before applying the fix, so the checked-in input remains unchanged.
+The repository smoke test performs writes in a temporary directory.

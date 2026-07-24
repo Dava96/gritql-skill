@@ -1,5 +1,10 @@
 {
-  "plugins": ["./use-console-info.grit"],
+  "plugins": [
+    {
+      "path": "./use-console-info.grit",
+      "includes": ["**/*.js", "!**/excluded.js"]
+    }
+  ],
   "linter": {
     "enabled": true
   }

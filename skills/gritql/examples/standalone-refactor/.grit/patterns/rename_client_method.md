@@ -9,7 +9,7 @@ Replace direct calls to a known client object's deprecated one-argument method.
 ```grit
 language js
 
-`client.oldMethod($value)` => `client.newMethod($value)`
+`client.oldMethod($argument)` => `client.newMethod($argument)`
 ```
 
 ## Rewrites a direct call
@@ -38,7 +38,15 @@ client.newMethod(createValue());
 unrelated.oldMethod(value);
 ```
 
+```typescript
+unrelated.oldMethod(value);
+```
+
 ## Leaves already migrated code untouched
+
+```typescript
+client.newMethod(value);
+```
 
 ```typescript
 client.newMethod(value);

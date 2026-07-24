@@ -1,50 +1,33 @@
 # Unofficial GritQL Skill
 
-> **Unofficial community project.** This repository is not affiliated with, maintained by, sponsored by, or endorsed by the Biome project, GritQL, Grit.io, Honeycomb, or their maintainers.
+> **Unofficial community project.** This repository is not affiliated with, maintained by, sponsored by, or endorsed by Biome, GritQL, Grit.io, Honeycomb, or their maintainers.
 
-An Agent Skills package for authoring, debugging, testing, and reviewing GritQL used for:
+An [Agent Skills](https://agentskills.io/) package for:
 
-- Biome analyzer/linter plugins;
-- structural search with `biome search`;
-- standalone Grit patterns;
-- deterministic codemods, migrations, and large refactors.
+- writing and debugging GritQL structural queries and rewrites;
+- authoring standalone Grit/Marzano patterns and fixture tests;
+- building Biome GritQL linter plugins with custom diagnostics;
+- validating Biome plugin scope, suppressions, and safe/unsafe fixes.
 
-The skill's main purpose is to stop coding agents from guessing GritQL syntax or mixing incompatible runtime features. It distinguishes Biome's GritQL implementation from standalone Grit/Marzano and requires patterns to be validated with the target project's actual CLI.
-
-## Status
-
-Early, usable draft (`0.1.0`). The references were reviewed against upstream sources on 2026-07-24, but GritQL and Biome continue to evolve. The installed target runtime remains authoritative.
-
-## Repository layout
-
-```text
-skills/gritql/
-├── SKILL.md
-├── examples/
-├── references/
-└── scripts/
-tests/
-```
+The skill emphasizes runtime differences and executable fixtures so agents do not mix standalone Tree-sitter patterns with Biome CST nodes or claim an untested query works.
 
 ## Install
 
 ### Pi
 
-After this repository is published:
+After publication:
 
 ```bash
 pi install git:github.com/<owner>/gritql-skill
 ```
 
-Or copy `skills/gritql` into `~/.pi/agent/skills/gritql`.
+Or copy `skills/gritql` to `~/.pi/agent/skills/gritql`.
 
-### Other Agent Skills-compatible tools
-
-Copy or link `skills/gritql` into the tool's skills directory. Installation conventions differ by harness; `skills/gritql/SKILL.md` follows the Agent Skills format.
+Other Agent Skills-compatible tools can copy or link the same directory into their skills location.
 
 ## Use
 
-Let the agent load the skill automatically when it encounters `.grit` files, Biome plugins, GritQL, structural search, or a suitable repeated refactor. In Pi, it can also be loaded explicitly:
+Pi can load the skill automatically or explicitly:
 
 ```text
 /skill:gritql
@@ -53,53 +36,43 @@ Let the agent load the skill automatically when it encounters `.grit` files, Bio
 Example requests:
 
 ```text
-Write and runtime-test a Biome GritQL plugin that bans direct process.env access.
+Write and test a GritQL rewrite for this API migration.
 ```
 
 ```text
-Assess whether this API migration should be a GritQL codemod, then build fixtures and a dry-run pattern.
+Build a Biome plugin that reports this project-specific TypeScript pattern.
 ```
 
 ```text
-Debug why this .grit pattern parses in standalone Grit but fails as a Biome plugin.
+Debug why this standalone Grit pattern works in Marzano but not as a Biome plugin.
 ```
 
 ## Development
 
-Requires Node.js 18+.
+Node.js 18+ is required for repository tests:
 
 ```bash
 npm install
 npm test
 ```
 
-`npm test` validates the skill package and runs smoke tests against the pinned development version of Biome.
+The smoke test runs the bundled plugin against the pinned development version of Biome. Target projects must still validate with their own installed version.
 
-The read-only environment detector can also be run directly:
+## Layout
 
-```bash
-node skills/gritql/scripts/gritql-doctor.mjs /path/to/project
+```text
+skills/gritql/
+├── SKILL.md
+├── examples/
+└── references/
+tests/
 ```
 
-## Design principles
+## Primary documentation
 
-1. Identify the GritQL runtime before selecting syntax.
-2. Prefer structural snippets before direct CST/AST nodes.
-3. Discover node and field names; never invent them.
-4. Test positive and near-miss negative fixtures.
-5. Search and dry-run before applying rewrites.
-6. Use the LLM to author one executable transformation, not to repeat the same edit across hundreds of files.
-7. Preserve a clear boundary between upstream facts, curated guidance, and runtime-validated behavior.
-
-## Upstream projects
-
-- [GritQL](https://github.com/biomejs/gritql)
-- [GritQL documentation](https://docs.grit.io/)
-- [Biome](https://github.com/biomejs/biome)
-- [Biome GritQL reference](https://biomejs.dev/reference/gritql/)
+- [GritQL language overview](https://docs.grit.io/language/overview)
 - [Biome linter plugins](https://biomejs.dev/linter/plugins/)
-
-See [`skills/gritql/references/sources.md`](skills/gritql/references/sources.md) for detailed source provenance.
+- [Biome GritQL reference](https://biomejs.dev/reference/gritql/)
 
 ## License
 

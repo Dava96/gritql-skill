@@ -1,8 +1,8 @@
 ---
 name: gritql
-description: Author, debug, test, and review GritQL for structural search, deterministic codemods, large refactors, migrations, and Biome analyzer/linter plugins. Use when working with .grit files, Grit patterns, biome search, Biome plugins or register_diagnostic(), or when a repeated code change may be safer and cheaper as a GritQL rewrite than as manual or LLM-authored edits.
+description: Write, debug, test, and review GritQL queries, rewrites, standalone patterns, and Biome linter plugins. Use for .grit files, structural code search or codemods, Grit/Marzano, biome search, Biome plugins, register_diagnostic(), plugins[].includes, or custom Biome diagnostics and fixes.
 license: MIT
-compatibility: Requires the target project's Biome CLI for Biome workflows or the Grit CLI for standalone GritQL workflows. The bundled doctor script requires Node.js 18+.
+compatibility: Standalone workflows require a compatible Grit CLI. Biome integrations require the target project's Biome CLI.
 metadata:
   author: David
   version: "0.1.0"
@@ -10,130 +10,61 @@ metadata:
 
 # GritQL
 
-This is an unofficial community-authored skill, not upstream Biome or GritQL documentation.
+Treat a GritQL pattern as executable code: identify its runtime, build positive and negative fixtures, and run it before calling it valid.
 
-Use GritQL as an executable specification: discover structurally, constrain explicitly, test on positive and negative fixtures, then rewrite. Never claim a query is valid merely because it looks plausible.
+## Route the task first
 
-## Start here
+A `.grit` file alone does not identify the runtime.
 
-1. Identify the runtime **before writing syntax**:
-   - **Biome plugin**: `.grit` appears in `biome.json`/`biome.jsonc` `plugins`, or the rule calls `register_diagnostic()`.
-   - **Biome search**: the task uses `biome search`. Search does not apply rewrites.
-   - **Standalone Grit/Marzano**: the project uses `.grit/grit.yaml`, `.grit/patterns`, `grit apply`, or `grit patterns test`.
-2. Inspect the project version, configuration, nearby patterns, target files, and available CLI. If useful, run:
+- **GritQL or standalone Grit/Marzano:** a query, rewrite, `.grit/grit.yaml`, `.grit/patterns`, `grit apply`, or `grit patterns test`. Read [references/language-core.md](references/language-core.md).
+- **Biome structural search:** invoked with `biome search`. Read the language reference, then [references/biome.md](references/biome.md) for Biome's supported subset. Search does not execute plugin diagnostics or rewrites.
+- **Biome linter plugin:** configured under `plugins` in `biome.json`/`biome.jsonc`, or calls `register_diagnostic()`. Read both references.
+- **Failure investigation:** after identifying the runtime, use [references/troubleshooting.md](references/troubleshooting.md).
 
-   ```bash
-   node <skill-directory>/scripts/gritql-doctor.mjs <project-root>
-   ```
-
-3. Read the runtime-specific reference:
-   - Biome: [references/biome.md](references/biome.md)
-   - Standalone refactors: [references/refactors.md](references/refactors.md)
-   - Core syntax: [references/language-core.md](references/language-core.md)
-   - Errors or non-matches: [references/troubleshooting.md](references/troubleshooting.md)
-4. Treat the installed target runtime as authoritative. GritQL support differs by runtime and version. Do not assume standalone Grit acceptance implies Biome compatibility, or vice versa.
-
-## Decide whether GritQL is the right tool
-
-Prefer GritQL when the change is:
-
-- repeated across many files;
-- recognizable by syntax rather than raw text;
-- expressible as explicit invariants and exclusions;
-- deterministic and reviewable as a diff;
-- testable with representative before/after fixtures.
-
-Prefer ordinary edits or a language-specific codemod when the change requires deep type information, control/data-flow reasoning unsupported by the runtime, highly contextual product judgment, or many unrelated one-off transformations.
-
-For borderline work, use a hybrid: use the LLM to design and validate one GritQL pattern, let the runtime execute the repetitive change, and reserve manual/LLM edits for classified exceptions.
+Inspect the target project's version, configuration, nearby patterns, target files, and package-manager scripts before authoring syntax. The installed target runtime is authoritative.
 
 ## Authoring workflow
 
-### 1. State the contract
+1. **State the contract.** Record runtime and version, target language/flavor, examples that must match, near misses that must not match, and the intended diagnostic or rewrite.
+2. **Check tool fit.** Avoid syntax-only GritQL when correctness needs types, symbol resolution, control flow, or data flow. For a Biome policy, prefer an existing built-in rule when it already fits.
+3. **Create fixtures.** Include formatting variants, repeated matches, an already-correct case, and one near miss differing by a single structural fact. Add zero/one/many-element cases when matching argument or item lists.
+4. **Grow the query.** Start with a backtick snippet, add metavariables, then `where` constraints and traversal. Use direct syntax-tree nodes only after discovering their exact runtime-specific names and fields. Add rewrites last.
+5. **Execute narrowly.** Run the pure query on fixtures, then diagnostics, then any rewrite on a copy. Compare exact output and run a second pass to check idempotence.
 
-Write down:
+If the required runner is unavailable, say **not runtime-validated**, give the exact command to run, and do not claim the pattern works.
 
-- target runtime and exact version;
-- target language/flavor;
-- positive examples that must match;
-- near-miss negative examples that must not match;
-- required rewrite, if any;
-- safety constraints and expected scope.
+## GritQL and standalone pattern requirements
 
-Do not begin with a large rewrite. Begin with the smallest structural search.
+- Declare the target language and use the target Grit version's syntax and node grammar.
+- Put reusable executable Markdown patterns under `.grit/patterns` and run `grit patterns test`.
+- In Grit Markdown tests, one code block is a positive search case; two blocks are input/output; two identical blocks encode a negative rewrite case.
+- Before applying a codemod broadly, inspect matches or a dry run, narrow the path, review the diff, run project checks, and rerun for idempotence.
+- Treat `multifile`, `$new_files`, JavaScript functions, and standard-library helpers as runtime-specific features rather than universal GritQL.
 
-### 2. Build a fixture corpus
+See [examples/standalone-refactor](examples/standalone-refactor/README.md).
 
-Include at minimum:
+## Biome integration requirements
 
-- one simple positive;
-- formatting and quote variants;
-- multiple matches in one file;
-- zero-match and near-miss negatives;
-- nested/aliased/optional forms relevant to the task;
-- an already-migrated case;
-- a case that must remain unchanged.
+- Confirm the target is JavaScript/TypeScript, CSS, or JSON, the languages currently documented by Biome.
+- Every successful lint-rule path must call `register_diagnostic()` with a bound `span` and a `message`.
+- Use `severity = "hint" | "info" | "warn" | "error"` only; it defaults to `error`.
+- A rewrite without `fix_kind` is unsafe. `--write` applies safe fixes; `--write --unsafe` also applies unsafe fixes.
+- Mark a fix safe only when the matched rewrite cannot change intended behavior. If uncertain, use `unsafe` or omit the fix.
+- Develop matching with `biome search`, but validate diagnostics and fixes with `biome lint` or `biome check`.
+- Scope rollout with `plugins[].includes` when the policy is not repository-wide, and test suppression with `lint/plugin` when relevant.
 
-Use real project excerpts after removing secrets. A pattern proven only against a toy example is not ready for a repository-wide refactor.
+See the runtime-tested integration fixture in [examples/biome-plugin](examples/biome-plugin/README.md).
 
-### 3. Grow the pattern incrementally
+## Completion checklist
 
-Use this order:
+- [ ] Runtime, version, language, and flavors are explicit.
+- [ ] One root query exists after any definitions.
+- [ ] Repeated named metavariables intentionally require the same binding.
+- [ ] List/argument cardinality is fixture-tested.
+- [ ] Positive, negative, near-miss, and repeated-match fixtures execute.
+- [ ] Direct node and field names came from the target runtime's syntax tree or grammar.
+- [ ] Diagnostics use a focused, always-bound span.
+- [ ] Rewrite safety, output, parsing, project checks, and second-pass behavior are verified.
+- [ ] Validation commands and results are reported.
 
-1. snippet pattern with backticks;
-2. metavariables for variable parts;
-3. `where` and `<:` constraints;
-4. `or`, `not`, `contains`, or `within` only as needed;
-5. runtime-specific CST/AST nodes only when snippets cannot express the rule;
-6. `=>` rewrite last.
-
-After every added constraint, execute the target runtime and inspect both matches and non-matches.
-
-### 4. Validate with the target runner
-
-For Biome plugins, run the project's Biome binary against isolated violating and valid fixtures. For standalone patterns, use Markdown/YAML samples and `grit patterns test`. Follow [references/biome.md](references/biome.md) or [references/refactors.md](references/refactors.md) for commands.
-
-If the required CLI is unavailable, say **“not runtime-validated”**, provide the exact command the user should run, and do not describe the pattern as working.
-
-### 5. Apply safely
-
-Before a repository-wide rewrite:
-
-1. require a clean or intentionally staged Git state;
-2. run search/dry-run first;
-3. record expected match counts and inspect every match class;
-4. apply to a narrow path or fixture;
-5. inspect the diff;
-6. run formatter, linter, type checker, and tests;
-7. widen scope in reviewable batches;
-8. rerun the pattern and verify idempotence (no unintended second-pass changes).
-
-Never use `--force`, `--write`, or an unsafe fix across a repository without first showing a dry run or fixture result.
-
-## Review checklist
-
-Before finishing, verify:
-
-- [ ] Runtime/dialect and version are explicit.
-- [ ] Language declaration is explicit for reusable patterns.
-- [ ] Pattern has one valid top-level query (definitions may precede it).
-- [ ] Named metavariables intentionally unify repeated occurrences.
-- [ ] `$...` versus a single argument metavariable is intentional.
-- [ ] Diagnostic span is the smallest useful bound node.
-- [ ] Positive and negative fixtures execute under the target runtime.
-- [ ] Rewrites preserve comments, imports, precedence, and formatting where relevant.
-- [ ] Biome `severity` and `fix_kind` use supported values.
-- [ ] Match count and diff were reviewed before broad application.
-- [ ] A second run is empty or intentionally documented.
-- [ ] Remaining exceptions are listed rather than silently ignored.
-
-## Non-negotiable rules
-
-- Do not invent CST/AST node or field names. Discover them from the target runtime’s syntax tree/playground or grammar files, then test them.
-- Do not mix Biome PascalCase CST names with standalone Tree-sitter-style node names.
-- Do not use `register_diagnostic()` outside a Biome plugin workflow.
-- Do not assume `biome search` can perform rewrites; it currently searches only.
-- Do not use regex as a substitute for structure when a snippet or node pattern exists.
-- Do not copy a documentation example without adapting and testing it against the user’s actual syntax and version.
-
-See [references/sources.md](references/sources.md) for official sources and the versions used to curate this skill.
+Never paste standalone Tree-sitter nodes into Biome, invent Biome CST fields, use `register_diagnostic()` outside Biome, or present a visually plausible query as tested.

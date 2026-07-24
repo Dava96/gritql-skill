@@ -1,12 +1,11 @@
-engine biome(1.0)
 language js(typescript, jsx)
 
-`console.log($message)` as $call where {
+`console.log($arguments)` as $call where {
     register_diagnostic(
         span = $call,
         message = "Use console.info instead of console.log.",
-        severity = "error",
-        fix_kind = "safe"
+        severity = "warn",
+        fix_kind = "unsafe"
     ),
-    $call => `console.info($message)`
+    $call => `console.info($arguments)`
 }

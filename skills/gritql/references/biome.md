@@ -1,210 +1,88 @@
 # GritQL in Biome
 
-Biome's GritQL implementation is related to, but not identical with, standalone Grit/Marzano. Validate every plugin with the project's installed Biome version.
+Biome linter plugins use GritQL to match syntax, report custom diagnostics, and optionally suggest rewrites. The target project's installed Biome version is authoritative because support is still evolving.
 
-## Current capability profile
+## Capabilities and boundaries
 
-As of the sources reviewed for this skill:
+Biome currently documents JavaScript/TypeScript, CSS, and JSON target languages. Plugins run through `biome lint` or `biome check`. `biome search` is useful for developing a pure structural match, but it does not execute `register_diagnostic()` or apply rewrites.
 
-- Biome supports GritQL target languages **JavaScript/TypeScript, CSS, and JSON**.
-- Analyzer plugins can report diagnostics with `register_diagnostic()` and may offer `=>` rewrites.
-- `biome search` performs structural search but does **not** apply rewrites.
-- Biome-specific direct CST matching uses `engine biome(1.0)` and PascalCase node names.
-- GritQL support is still evolving; some standalone Grit features are absent or behave differently.
+Before creating a plugin, check whether a built-in Biome rule already expresses the policy. GritQL matching is syntactic: aliases, shadowing, types, symbol identity, control flow, and data flow are not inferred.
 
-Inspect the user's Biome version and current docs before relying on this matrix.
-
-## Plugin shape
-
-A minimal JavaScript/TypeScript plugin:
+## Minimal diagnostic plugin
 
 ```grit
-engine biome(1.0)
 language js(typescript, jsx)
 
-`Object.assign($args)` as $call where {
+`$function($arguments)` where {
+    $function <: `Object.assign`,
     register_diagnostic(
-        span = $call,
-        message = "Prefer object spread instead of `Object.assign()`."
+        span = $function,
+        message = "Prefer object spread instead of `Object.assign()`.",
+        severity = "warn"
     )
 }
 ```
 
-Register it in `biome.json` or `biome.jsonc`:
+The focused `$function` binding is the highlighted span. Bind the complete call with `as $call` when the whole invocation is the useful span or rewrite target.
 
-```json
-{
-  "plugins": ["./plugins/no-object-assign.grit"]
-}
-```
+Every independently successful lint-rule branch must reach `register_diagnostic()`. A pure match or rewrite is not a complete linter rule.
 
-Restrict it to selected files when appropriate:
+## Configuration and file scope
 
 ```json
 {
   "plugins": [
     {
-      "path": "./plugins/react-rule.grit",
-      "includes": ["src/components/**", "!src/**/*.test.tsx"]
+      "path": "./plugins/project-rule.grit",
+      "includes": ["src/**/*.ts", "!src/**/*.test.ts"]
     }
   ]
 }
 ```
 
-When `includes` is present, at least one positive glob must match and no negated glob may match. An empty list runs the plugin nowhere.
+Without `includes`, the plugin runs on every supported file Biome processes. With it, a file must match a positive glob and no negated glob. Paths follow Biome's glob rules. Plugin diagnostics can be suppressed with `// biome-ignore lint/plugin: reason`; test this when suppression is part of rollout.
 
-## `register_diagnostic()`
+## Plugin API
 
-Supported arguments:
+`register_diagnostic()` accepts:
 
-| Argument | Required | Values/meaning |
+| Argument | Required | Contract |
 |---|---:|---|
-| `span` | yes | Bound syntax node to highlight. Prefer the smallest useful node. |
-| `message` | yes | Diagnostic text. |
+| `span` | yes | A bound syntax node to highlight. Prefer the smallest actionable node. |
+| `message` | yes | The user-facing diagnostic. |
 | `severity` | no | `hint`, `info`, `warn`, or `error`; defaults to `error`. |
-| `fix_kind` | no | `safe` or `unsafe`; rewrites default to unsafe. |
+| `fix_kind` | no | `safe` or `unsafe`; a rewrite defaults to unsafe. |
 
-Example with a safe fix:
+A fix must register its diagnostic and rewrite on the same successful path:
 
 ```grit
-engine biome(1.0)
-language js(typescript, jsx)
-
-`console.log($message)` as $call where {
+`console.log($arguments)` as $call where {
     register_diagnostic(
         span = $call,
-        message = "Use console.info instead of console.log.",
+        message = "Use the project's preferred logger.",
         severity = "warn",
-        fix_kind = "safe"
+        fix_kind = "unsafe"
     ),
-    $call => `console.info($message)`
+    $call => `console.info($arguments)`
 }
 ```
 
-Behavior:
+This example is **unsafe** because changing the logging method can change observable logging behavior. Without `--write`, Biome only suggests the rewrite. `--write` applies safe fixes; `--write --unsafe` also applies unsafe or unclassified rewrites. Omit both the rewrite and `fix_kind` for a diagnostic-only rule.
 
-- no `--write`: show the diagnostic and fix suggestion;
-- `--write`: apply `fix_kind = "safe"` rewrites;
-- `--write --unsafe`: also apply unsafe rewrites;
-- omitted `fix_kind`: rewrite is unsafe.
+## Snippets before CST nodes
 
-A rewrite without `register_diagnostic()` is not a complete linter rule. A diagnostic's `fix_kind` matters only when the same match also performs a rewrite.
-
-Plugin diagnostics may be suppressed with a `lint/plugin` suppression comment. Test suppressions if the rule will be adopted across an existing codebase.
-
-## Testing a plugin
-
-Use the project's package manager and installed Biome binary. Typical commands are:
-
-```bash
-pnpm exec biome --version
-pnpm exec biome lint path/to/violating-fixture.ts
-pnpm exec biome lint path/to/valid-fixture.ts
-pnpm exec biome lint --write path/to/rewrite-fixture.ts
-```
-
-Equivalent launchers include `npm exec biome --`, `yarn biome`, and `bunx biome`. Prefer an existing project script if one is defined. Do not silently download a different Biome release to validate a project plugin.
-
-A robust fixture test has:
-
-```text
-plugin-test/
-├── biome.json
-├── rule.grit
-├── invalid.ts       # must emit the expected message/span
-├── valid.ts         # must emit no plugin diagnostic
-└── expected.ts      # expected safe rewrite, if applicable
-```
-
-Test in this order:
-
-1. Run lint on `rule.grit` or format/check it with the project tool so parser errors are visible.
-2. Lint `invalid.ts`; assert diagnostic text and useful span.
-3. Lint `valid.ts`; assert no plugin diagnostic.
-4. Copy `invalid.ts`, apply `--write` (and `--unsafe` only when intentional), and compare with `expected.ts`.
-5. Lint the rewritten file again; it should normally produce no rule diagnostic.
-6. Add regression fixtures for every false positive or false negative found.
-
-Biome does not infer the intended target language from a plugin filename. Declare it explicitly, especially for CSS and JSON.
-
-## Search before linting
-
-Use `biome search` to develop a pure match before adding diagnostics or rewrites:
-
-```bash
-pnpm exec biome search '`console.log($message)`' src
-```
-
-Use single quotes around shell queries containing backticks. When invoking the executable without a shell (for example, an argument array in Node), pass the backticks literally and do not add shell quotes.
-
-`biome search` currently cannot execute `=>` rewrites. Use it to inspect match coverage, then move the validated pattern into a plugin for diagnostics/fixes.
-
-For piped code:
-
-```bash
-printf 'let value = 1;\n' | pnpm exec biome search '`let $var = $value`' --stdin-file-path=fixture.ts
-```
-
-## Snippet-first plugin examples
-
-### Ban a method regardless of argument count
-
-Use anonymous `$...` when the arguments are irrelevant. A named metavariable in the argument position (such as `$args`) may instead bind the runtime's complete argument-list field, so do not assume it means “exactly one argument.” Use `$first, $...` when the rule must require at least one argument.
+Start with target-language snippets and use `$...` when list contents are irrelevant:
 
 ```grit
 `$collection.forEach($...)` as $call where {
     register_diagnostic(
         span = $call,
-        message = "Prefer for...of over forEach()."
+        message = "Prefer `for...of` over `.forEach()`."
     )
 }
 ```
 
-### Restrict imports
-
-```grit
-`import $_ from $source` where {
-    $source <: or { `'lodash'`, `'underscore'`, `'moment'` },
-    register_diagnostic(
-        span = $source,
-        message = "Use an approved dependency instead."
-    )
-}
-```
-
-To catch multiple syntax shapes, use one top-level `or` and unify bindings deliberately:
-
-```grit
-or {
-    `import $_ from $source`,
-    `require($source)`
-} where {
-    $source <: or { `'lodash'`, `'underscore'` },
-    register_diagnostic(
-        span = $source,
-        message = "This dependency is restricted."
-    )
-}
-```
-
-### Multiple independent checks in one plugin
-
-```grit
-or {
-    `debugger` as $match where {
-        register_diagnostic(span = $match, message = "Remove debugger statements.")
-    },
-    `alert($...)` as $match where {
-        register_diagnostic(span = $match, message = "Remove alert() calls.")
-    }
-}
-```
-
-Prefer one focused rule per file when separate ownership, messages, include globs, or rollout schedules are useful.
-
-## Biome CST patterns
-
-Use CST nodes when snippets cannot express the required structural constraint:
+Use direct nodes only when snippets cannot express the structural requirement:
 
 ```grit
 engine biome(1.0)
@@ -220,62 +98,52 @@ JsCatchClause(
 }
 ```
 
-Discover node and field names from:
+Discover node and field names from the target version's Biome Playground **Syntax** tab or matching `.ungram` grammar files. Do not paste standalone Tree-sitter names such as `call_expression()` into a Biome query.
 
-1. the **Syntax** tab in the Biome Playground for representative source;
-2. the `.ungram` grammar files in the matching Biome source version;
-3. existing tests/patterns in that Biome release.
-
-Do not copy a node name from a newer website into an older project without validation. Names can change.
-
-### CSS
+Declare non-JavaScript targets explicitly:
 
 ```grit
-engine biome(1.0)
 language css
 
 `color: $value` as $declaration where {
     $value <: r"#[0-9a-fA-F]+",
     register_diagnostic(
         span = $value,
-        message = "Use a CSS custom property instead of a hex color.",
-        severity = "warn"
+        message = "Use a CSS custom property instead."
     )
 }
 ```
 
-### JSON
+JSON snippets and CST names are version-sensitive. Start with the documented snippet syntax, then inspect the target runtime's CST when it does not express the needed match.
 
-Current Biome documentation cautions that JSON snippet metavariable support is limited. Prefer direct CST nodes when a snippet fails:
+## Validation loop
 
-```grit
-engine biome(1.0)
-language json
+Use the project's local launcher and existing Biome version. For example:
 
-JsonMemberName() as $name where {
-    $name <: r".*_.*",
-    register_diagnostic(
-        span = $name,
-        message = "JSON keys must use camelCase.",
-        severity = "warn"
-    )
-}
+```bash
+pnpm exec biome --version
+pnpm exec biome search '`console.log($arguments)`' path/to/fixtures
+pnpm exec biome lint path/to/invalid.ts --colors=off --max-diagnostics=none
+pnpm exec biome lint path/to/valid.ts --colors=off --max-diagnostics=none
+pnpm exec biome lint --write path/to/safe-fix-copy.ts
+pnpm exec biome lint --write --unsafe path/to/unsafe-fix-copy.ts
 ```
 
-Regex sees the full rendered node, including quotes around a JSON member name.
+Validate in this order:
 
-## Biome-specific failure checklist
+1. Pure match count on violating and near-miss fixtures.
+2. Exact plugin message and useful span—not just nonzero exit status.
+3. Zero, one, and multiple list elements when cardinality matters.
+4. Include/exclude globs and suppression when used.
+5. Rewrite output on a copy with the appropriate write flag.
+6. Parsing, formatting, type checking, project tests, and an idempotent second pass.
 
-If a plugin parses but does not behave correctly, check:
+Do not silently download another Biome release to validate a project plugin. If the local binary is unavailable, report the plugin as not runtime-validated.
 
-- Is the plugin path resolved relative to the intended Biome config?
-- Do `plugins[].includes` globs include the fixture?
-- Is the target one of the Biome-supported languages?
-- Does the declaration include the needed `typescript` or `jsx` flavor?
-- Is argument cardinality explicit and fixture-tested (`$...`, a named list binding, or `$first, $...`)?
-- Is `register_diagnostic()` inside the arm that actually matched?
-- Is the span bound in every `or` arm that reaches the shared `where` clause?
-- Did a guessed CST field use a Tree-sitter name rather than Biome's field name?
-- Is a fix omitted because it defaults to unsafe and the command used only `--write`?
-- Is a generic `lint/plugin` suppression hiding the result?
-- Is the project executing a different Biome version than the one inspected?
+## Official references
+
+- [Biome linter plugins](https://biomejs.dev/linter/plugins/)
+- [Biome GritQL reference](https://biomejs.dev/reference/gritql/)
+- [Biome plugin recipes](https://biomejs.dev/recipes/gritql-plugins/)
+- [Biome Playground](https://biomejs.dev/playground/)
+- [Plugin suppressions](https://biomejs.dev/analyzer/suppressions/#plugin-suppressions)

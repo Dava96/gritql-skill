@@ -1,179 +1,67 @@
 # Troubleshooting GritQL
 
-Diagnose the failure stage before changing syntax. “It does not work” may mean shell corruption, GritQL parse failure, compile/runtime incompatibility, zero matches, false matches, or an incorrect rewrite.
+First identify the failing stage: runtime/config discovery, compilation, matching, diagnostic registration, or rewrite application. Change one layer at a time.
 
-## 1. Confirm what actually ran
+## Confirm the runtime
 
-Record:
+Record the executable and version. Inspect which config is discovered and whether the `.grit` file is a Biome plugin, a `biome search` query, or a standalone Grit pattern. Do not debug a Biome plugin with a standalone runner or vice versa.
 
-```bash
-biome --version
-biome --help
-grit --version
-grit apply --help
-```
+For Biome, check the plugin path, `plugins[].includes`, target file extension, and `typescript`/`jsx` flavor. Use the project's local package-manager command rather than a global or newly downloaded release.
 
-Use the project-local executable and package manager where applicable. Check the working directory and the configuration file selected by the command. A globally installed CLI can make a valid project pattern appear broken—or accept syntax the project release cannot execute.
+## Reduce to a pure match
 
-## 2. Eliminate shell quoting problems
-
-Backticks are shell syntax. Wrap inline GritQL in single quotes in Bash-like shells:
+Remove definitions, effects, and rewrites until only the smallest snippet remains. For Biome:
 
 ```bash
-biome search '`console.log($message)`' src
-
-grit apply '`console.log($message)` => `console.info($message)`' src --dry-run
+pnpm exec biome search '`console.log($...)`' path/to/fixture.ts
 ```
 
-PowerShell also treats backticks specially. Prefer a `.grit` file, a literal here-string, or an argument API that bypasses shell parsing. When spawning a process with an argument array, pass the query as one raw argument without adding shell quote characters.
+Backticks are shell syntax. Single-quote the query in Bash-like shells; in PowerShell prefer a `.grit` file, literal here-string, or argument API.
 
-If the parser reports a strange error around a snippet that is valid in a file, suspect the shell first.
+Reintroduce one item at a time:
 
-## 3. Reduce to the smallest valid query
+1. language and flavors;
+2. metavariable/list cardinality;
+3. each `where` condition;
+4. traversal or direct node field;
+5. helper or built-in call;
+6. `register_diagnostic()` for a Biome plugin;
+7. rewrite.
 
-Replace the pattern temporarily with a trivial snippet in the correct language:
+`biome search` proves only the match. It does not prove plugin diagnostics or fixes.
+
+## Common failures
+
+| Symptom | Checks |
+|---|---|
+| Compile error | Multiple root queries; missing comma; unsupported runtime feature; wrong built-in signature; invented node/field; variable used outside its scope. |
+| No matches | Wrong target language/flavor; snippet invalid in that syntax position; named variables unintentionally unified; zero/one/many list behavior; overrestrictive `where`; wrong CST dialect. |
+| Too many matches | Add structural callee/source/context evidence; use `within`, `contains`, or `not`; narrow plugin includes; reconsider whether types or symbol identity are required. |
+| Search matches, plugin is silent | Plugin not configured; includes exclude fixture; successful branch does not call `register_diagnostic()`; span unbound in an `or` arm; `lint/plugin` suppression active. |
+| Wrong span | Bind the smallest source, attribute, call, or value users should act on with `as` or a verified node field. |
+| Fix is not applied | Safe fixes require `fix_kind = "safe"` and `--write`; unsafe/unclassified fixes require `--write --unsafe`; the rewrite must share the diagnostic's successful path. |
+| Malformed output | Rewrite a smaller binding; preserve required metavariables; test comments, precedence, optional syntax, and empty/multiple list elements. |
+| Only first occurrence matches | Check repeated named bindings and scope; in standalone Grit, use an appropriate `bubble` when each descendant needs independent bindings. |
+
+## Prove a Biome plugin loads
+
+Temporarily use a distinctive trivial rule in the correct language:
 
 ```grit
-language js(typescript, jsx)
+language js
 
-`console.log($message)`
+`debugger` as $match where {
+    register_diagnostic(
+        span = $match,
+        message = "TEMP: plugin loaded"
+    )
+}
 ```
 
-Then reintroduce, one at a time:
+Run it against a dedicated fixture containing `debugger`. If it fails, fix config, includes, language, or compilation before restoring the complex query.
 
-1. language flavor;
-2. metavariables;
-3. `where`;
-4. each condition;
-5. direct node patterns;
-6. diagnostics;
-7. rewrites.
+## Rewrite safety
 
-Execute after every step. This identifies the unsupported or malformed construct instead of prompting broad speculative rewrites.
+A parseable rewrite can still change behavior. Test the exact output, then run formatter, parser, type checker, and project tests. Run the write command twice; the second pass should make no further change. If syntax alone cannot establish safety, classify the fix unsafe or remove it.
 
-## 4. Parse and structure errors
-
-Check these common causes:
-
-- Missing comma between entries in `{ ... }`.
-- Multiple bare top-level queries. Combine them with `or` or define helpers and invoke one root query.
-- A `pattern`, `predicate`, or function definition nested where only top-level definitions are allowed.
-- Invalid metavariable name; named variables begin with `$` followed by a letter/underscore and alphanumerics/underscores.
-- `$` or a backtick intended as literal target-language text but not escaped.
-- `sequential` nested inside another pattern; standalone Grit supports it only at top level.
-- A standalone-only feature used in Biome.
-- `register_diagnostic()` used in `biome search` or standalone Grit rather than a Biome analyzer plugin.
-- A rewrite passed to `biome search`, which currently supports searches only.
-- Wrong engine/version directive.
-
-Run a formatter/parser supplied by the same runtime if available; acceptance by an editor grammar alone is not sufficient.
-
-## 5. Query parses but matches nothing
-
-Check:
-
-### Language and flavor
-
-- JSX requires a JSX-capable declaration.
-- TypeScript-only syntax needs the TypeScript flavor.
-- Biome supports only its documented target languages.
-- File extension and `--stdin-file-path` must tell the runner the correct target language.
-
-### Pattern cardinality
-
-- A named metavariable generally binds one structural value, but that value may be a complete list field (for example, a call's arguments) depending on snippet position and runtime.
-- `$...` explicitly permits zero or more list elements without naming the binding.
-- `$first, $...` requires one or more and binds the first element.
-- A repeated named variable requires the same binding each time.
-
-Never infer call cardinality from the metavariable spelling alone. Test zero-, one-, and multiple-argument fixtures with the target runtime.
-
-### Structural shape
-
-A snippet must be valid target-language syntax in the context in which Grit parses it. If a fragment such as an object member, JSX attribute, CSS declaration, or JSON member does not parse or match as a standalone snippet, either provide a larger syntactic container or use a verified direct node.
-
-### Scope
-
-Metavariables unify inside their scope. A descendant traversal may match only the first occurrence if later occurrences bind a different value. Use `bubble` for independent bindings where the runtime supports it.
-
-### Overconstraint
-
-Remove `where` conditions one at a time. Use a search-only query or standalone `log(...)` debugging to inspect what each metavariable actually binds.
-
-## 6. Query matches too much
-
-Add structural constraints, not textual guesses:
-
-- constrain callee/object shape;
-- use `within` for required ancestors;
-- use `$program <: contains ...` for file-level evidence;
-- exclude generated/test paths in runner configuration rather than encoding every path in syntax;
-- add `not` conditions for known safe forms;
-- use direct nodes only after inspecting the syntax tree.
-
-Remember that a syntactic construction such as `$instance = new TargetClient(...)` is not full type analysis. Aliases, reassignment, parameters, and imports can violate the assumption. Classify these exceptions.
-
-## 7. Direct node pattern fails
-
-The most common cause is using the wrong grammar's name or field.
-
-- Biome CST: PascalCase names such as `JsConditionalExpression` and Biome-native field names.
-- Standalone Grit/Tree-sitter: commonly lowercase names such as `call_expression` with Tree-sitter fields.
-
-Discover the exact node and fields from the target version's syntax tree or grammar. Start with `NodeName()` before adding fields. Add one field at a time and execute after each addition.
-
-Do not translate names mechanically (`call_expression` → `CallExpression`); naming and tree shape can differ fundamentally.
-
-## 8. Biome plugin emits no diagnostic
-
-Verify:
-
-1. `biome.json`/`biome.jsonc` actually lists the plugin.
-2. The path is correct relative to the selected config.
-3. `plugins[].includes` includes the fixture and no negated glob excludes it.
-4. The linter is enabled and the command runs plugins (check `--only`/`--skip`).
-5. The pattern's matched arm executes `register_diagnostic()`.
-6. `span` is bound for every relevant arm.
-7. A `lint/plugin` suppression is not active.
-8. Diagnostic output is not hidden by diagnostic-level or max-diagnostics settings.
-
-Use a distinctive temporary message to prove which plugin version loaded.
-
-## 9. Biome fix is suggested but not applied
-
-- Safe fixes require `fix_kind = "safe"` and `--write`.
-- Rewrites without `fix_kind` are unsafe by default.
-- Unsafe fixes require `--write --unsafe`.
-- Invalid `fix_kind` or `severity` values cause plugin errors.
-- The diagnostic and rewrite must occur in the same successful match path.
-
-Apply the fix to a copied fixture, not the only source file, while debugging.
-
-## 10. Rewrite output is malformed or loses content
-
-- Bind and rewrite the smallest node that must change.
-- Preserve all needed metavariables on the right-hand side.
-- Test comments attached before, inside, and after the target.
-- Test operator precedence and parentheses.
-- Test empty and multi-element lists.
-- Avoid `raw` output unless intentionally bypassing syntax-aware construction.
-- Separate import changes from call-site changes until each works independently.
-- Run the target language formatter and parser immediately after rewriting.
-
-If the first rewrite changes the structure so that the same rule rewrites again, add an already-migrated negative fixture and make the rule idempotent.
-
-## 11. Standalone pattern passes examples but fails on the repository
-
-The fixture corpus is incomplete. Sample and classify real matches, then add regression cases for:
-
-- aliases and shadowed names;
-- same method on unrelated types;
-- nested callbacks/functions;
-- different import styles;
-- comments and unusual formatting;
-- generated/vendor/test files;
-- parse errors and unsupported extensions;
-- multiple matches sharing scope;
-- files that contain both old and new APIs.
-
-Never solve this by applying with `--force` and hoping project tests catch everything.
+For standalone codemods, search or dry-run narrowly before applying, inspect every match class, and preserve a reviewable Git diff.

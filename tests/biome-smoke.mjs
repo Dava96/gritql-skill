@@ -20,6 +20,7 @@ const biomeLauncher = join(
 	"bin",
 	"biome",
 );
+const message = "Use console.info instead of console.log.";
 
 assert.ok(
 	existsSync(biomeLauncher),
@@ -40,53 +41,82 @@ try {
 		"--colors=off",
 		"--max-diagnostics=none",
 	]);
-	assert.notEqual(invalid.status, 0, "violating fixture should fail lint");
-	assert.match(output(invalid), /Use console\.info instead of console\.log\./);
-
-	const valid = runBiome([
-		"lint",
-		"valid.js",
-		"--colors=off",
-		"--max-diagnostics=none",
-	]);
-	assert.equal(valid.status, 0, output(valid));
-	assert.doesNotMatch(
-		output(valid),
-		/Use console\.info instead of console\.log\./,
-	);
-
-	cpSync(join(fixture, "invalid.js"), join(fixture, "actual.js"));
-	const rewrite = runBiome(["lint", "--write", "actual.js", "--colors=off"]);
-	assert.equal(rewrite.status, 0, output(rewrite));
 	assert.equal(
-		normalizeNewlines(readFileSync(join(fixture, "actual.js"), "utf8")),
-		normalizeNewlines(readFileSync(join(fixture, "valid.js"), "utf8")),
-		"safe plugin rewrite should produce the valid fixture",
+		(output(invalid).match(new RegExp(escapeRegex(message), "g")) ?? []).length,
+		3,
+		`expected one plugin diagnostic for each argument-cardinality fixture\n${output(invalid)}`,
 	);
 
-	const idempotent = runBiome(["lint", "--write", "actual.js", "--colors=off"]);
+	for (const path of ["valid.js", "suppressed.js", "excluded.js"]) {
+		const result = runBiome([
+			"lint",
+			path,
+			"--colors=off",
+			"--max-diagnostics=none",
+		]);
+		assert.equal(result.status, 0, output(result));
+		assert.doesNotMatch(output(result), new RegExp(escapeRegex(message)));
+	}
+
+	const actualPath = join(fixture, "actual.js");
+	cpSync(join(fixture, "invalid.js"), actualPath);
+
+	const ordinaryWrite = runBiome([
+		"lint",
+		"--write",
+		"actual.js",
+		"--colors=off",
+	]);
+	assert.equal(ordinaryWrite.status, 0, output(ordinaryWrite));
+	assert.equal(
+		normalizeNewlines(readFileSync(actualPath, "utf8")),
+		normalizeNewlines(readFileSync(join(fixture, "invalid.js"), "utf8")),
+		"plain --write must not apply an unsafe plugin fix",
+	);
+
+	const unsafeWrite = runBiome([
+		"lint",
+		"--write",
+		"--unsafe",
+		"actual.js",
+		"--colors=off",
+	]);
+	assert.equal(unsafeWrite.status, 0, output(unsafeWrite));
+	assert.equal(
+		normalizeNewlines(readFileSync(actualPath, "utf8")),
+		normalizeNewlines(readFileSync(join(fixture, "valid.js"), "utf8")),
+		"--write --unsafe should produce the valid fixture",
+	);
+
+	const idempotent = runBiome([
+		"lint",
+		"--write",
+		"--unsafe",
+		"actual.js",
+		"--colors=off",
+	]);
 	assert.equal(idempotent.status, 0, output(idempotent));
 	assert.equal(
-		normalizeNewlines(readFileSync(join(fixture, "actual.js"), "utf8")),
+		normalizeNewlines(readFileSync(actualPath, "utf8")),
 		normalizeNewlines(readFileSync(join(fixture, "valid.js"), "utf8")),
 		"second plugin pass should be idempotent",
 	);
 
 	const search = runBiome([
 		"search",
-		"`console.log($message)`",
+		"`console.log($arguments)`",
 		"invalid.js",
 		"--colors=off",
 	]);
 	assert.equal(search.status, 0, output(search));
 	assert.match(output(search), /console\.log/);
-
-	console.log(
-		"Biome 2.5.5 plugin diagnostic, negative case, safe rewrite, idempotence, and search passed.",
-	);
 } finally {
 	rmSync(fixture, { recursive: true, force: true });
 }
+
+console.log(
+	"Biome 2.5.5 diagnostics, argument cardinality, negative fixtures, includes, suppression, unsafe writes, idempotence, and search passed.",
+);
 
 function runBiome(args) {
 	return spawnSync(process.execPath, [biomeLauncher, ...args], {
@@ -101,4 +131,8 @@ function output(result) {
 
 function normalizeNewlines(value) {
 	return value.replaceAll("\r\n", "\n");
+}
+
+function escapeRegex(value) {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

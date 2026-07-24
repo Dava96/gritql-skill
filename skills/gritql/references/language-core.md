@@ -1,32 +1,14 @@
-# GritQL core language
+# GritQL language core
 
-This is a compact authoring reference, not a replacement for runtime validation. Examples use canonical punctuation that is accepted by current Biome/Grit parsers; support for advanced constructs varies.
+GritQL structurally searches and optionally rewrites syntax trees. The official language docs primarily describe standalone Grit; Biome implements a subset with its own syntax-tree node names and plugin API. Confirm the runtime before using advanced features.
 
-## Minimal shape
+## Program shape and target language
 
-A reusable query should normally declare its language:
+A program contains definitions followed by one root query:
 
 ```grit
 language js(typescript, jsx)
 
-`console.log($message)`
-```
-
-Common declarations:
-
-```grit
-language js
-language js(typescript)
-language js(typescript, jsx)
-language css
-language json
-```
-
-Standalone Grit supports more target languages than Biome. See the runtime-specific references before selecting one.
-
-A GritQL program has definitions followed by one top-level query:
-
-```grit
 pattern is_debug_call() {
     or { `console.log($...)`, `console.debug($...)` }
 }
@@ -34,168 +16,108 @@ pattern is_debug_call() {
 is_debug_call()
 ```
 
-To combine independent top-level rules, use `or`, `any`, or (for supported standalone workflows) `sequential` rather than placing multiple bare queries in one file.
+Common declarations are `language js`, `language js(typescript)`, `language js(typescript, jsx)`, `language css`, and `language json`. Standalone Grit supports additional languages; Biome currently documents only JavaScript/TypeScript, CSS, and JSON.
 
-## Structural snippets
+## Structural snippets and metavariables
 
-Backticks contain source-language snippets:
-
-```grit
-`console.log("hello")`
-```
-
-Matching is structural, so trivia and usually quote style do not need to match exactly.
-
-Use metavariables as holes:
+Backticks contain code in the target language:
 
 ```grit
-`console.log($message)`
-`console.$method($message)`
+`console.$method($argument)`
 `$left && $left()`
 ```
 
-The last pattern repeats `$left`, so both occurrences must bind to the same syntax.
-
-### Metavariables
+Formatting and usually quote style are ignored. Repeating `$left` requires both occurrences to bind the same structure.
 
 | Form | Meaning |
 |---|---|
-| `$value` | Bind one structural value. Depending on its snippet position, that value may itself be a list field such as a full argument list. |
-| `$_` | Match one structural value without retaining a named binding. |
-| `$...` | Explicitly match zero or more list elements, such as arguments. Anonymous. |
-| `$first, $...` | Require at least one list element and bind its first element. |
-| `$program` | Entire current program (predefined by standalone Grit and used by supported runtimes). |
-| `$filename` | Current relative path in standalone Grit. |
-| `$new_files` | Standalone Grit accumulator for new files. |
+| `$value` | Named binding. In some list positions it can bind the complete list field. |
+| `$_` | Anonymous binding for an irrelevant value. |
+| `$...` | Anonymous spread matching zero or more list elements. |
+| `$first, $...` | One required element followed by zero or more. |
+| `` `pattern` as $match `` | Bind the complete matched node. |
 
-Named metavariables must match `$[a-zA-Z_][a-zA-Z0-9_]*`. Prefer lowercase snake case. `$program`, `$filename`, `$new_files`, and `$grit_*` names are reserved.
+Names follow `$[a-zA-Z_][a-zA-Z0-9_]*`. Use `$[name]Suffix` to separate a metavariable from adjacent output text. Test zero, one, and multiple arguments instead of inferring cardinality from a name such as `$args`.
 
-To disambiguate a variable next to literal text in an output snippet, use brackets:
+## Conditions and composition
 
-```grit
-`class $name {}` => `class $[name]Controller {}`
-```
-
-## Conditions
-
-Attach conditions with `where`:
+Use `where` to attach conditions and `<:` to structurally match an existing binding:
 
 ```grit
-`console.$method($message)` as $call where {
-    $method <: or { `log`, `debug` },
-    $message <: not `"allowed"`
+`console.$method($...)` where {
+    $method <: or { `log`, `debug` }
 }
 ```
 
-- `<:` matches the bound value/node on the left against the pattern on the right.
-- Conditions separated by commas in a `where` block must all succeed.
-- `not PATTERN` negates a pattern.
-- `! CONDITION` negates an entire condition where supported.
-- `=` assigns a value; it is not the structural match operator.
-- `==` compares resolved values in runtimes that support it.
+- Comma-separated conditions must all succeed.
+- `<:` matches; `=` assigns a value; `==` compares resolved values where supported.
+- `not PATTERN` negates a pattern; `! CONDITION` negates a condition.
+- `or { ... }` short-circuits at the first matching arm.
+- `any { ... }` tries every arm and may run multiple effects.
+- `and { ... }` requires every arm.
+- `maybe PATTERN` succeeds even when its child does not.
 
-Prefer `<:` for structural constraints:
+A shared `where` after `or` may only reference variables bound by every arm.
+
+## Traversal and scope
+
+- `contains PATTERN` searches descendants.
+- `within PATTERN` searches ancestors.
+- `before` and `after` match nearby syntax-tree nodes.
+- `some` and `every` apply a pattern to elements of a list.
+- `bubble` creates an inner metavariable scope; arguments such as `bubble($name)` carry selected outer bindings into it.
 
 ```grit
-$source <: or { `'lodash'`, `'underscore'` }
-```
-
-## Pattern composition
-
-```grit
-or {
-    `eval($code)`,
-    `new Function($...)`
+`function $name() { $body }` where {
+    $body <: contains bubble($name) {
+        `console.log($message)` as $call
+    }
 }
 ```
 
-- `and { ... }`: all patterns must match.
-- `or { ... }`: first successful arm wins (short-circuiting).
-- `any { ... }`: tries all arms; useful when multiple transformations should run.
-- `maybe PATTERN`: succeeds even if the inner pattern does not match.
-
-Bind an entire match with `as`:
-
-```grit
-`console.log($message)` as $call
-```
-
-This is especially useful for a diagnostic span or rewrite target.
-
-## Tree navigation
-
-Search downward with `contains`:
-
-```grit
-`function $name($...) { $body }` where {
-    $body <: contains `console.log($...)`
-}
-```
-
-Search ancestors with `within`:
-
-```grit
-`console.log($arg)` as $call where {
-    $call <: within `if (DEBUG) { $_ }`
-}
-```
-
-Use `until` to stop a downward traversal:
-
-```grit
-`console.$_($content)` where {
-    $content <: contains `secret` until `sanitized($_)`
-}
-```
-
-`before` and `after` constrain or retrieve adjacent nodes. `some` and `every` apply a pattern to elements of a list. These are more runtime-sensitive; test them directly.
+Standalone Grit auto-wraps ordinary root patterns so they can match repeatedly in a file. Explicit `file`, `sequential`, or `multifile` patterns change scoping and execution. Do not assume identical scoping in another runtime without fixtures.
 
 ## Rewrites
 
-The rewrite operator is `=>`:
+`=>` replaces the left match with the right value:
 
 ```grit
-`console.log($message)` => `console.info($message)`
+`client.oldMethod($argument)` => `client.newMethod($argument)`
 ```
 
-Delete a match by rewriting to the empty pattern:
+Delete with the empty pattern:
 
 ```grit
 `debugger` => .
 ```
 
-A clear form for complex rewrites is to bind the target and rewrite it inside `where`:
+Prefer rewriting the smallest binding that changes. This better preserves comments, modifiers, and surrounding syntax:
 
 ```grit
-`console.log($message)` as $call where {
-    $message <: not `"keep"`,
-    $call => `console.info($message)`
+`function $name($args) { $body }` where {
+    $name <: `oldName` => `newName`
 }
 ```
 
-Keep the rewrite target as specific as possible. Rewriting an inner metavariable often preserves surrounding syntax and comments better than replacing a large enclosing snippet.
+A rewrite being syntactically valid does not make it semantically safe.
 
-## Regex
+## Regex, lists, maps, and functions
 
-Use `r"..."` for text constraints:
+Regex patterns use `r"..."` and match the full rendered node/value. Add `.*` only for intentional substring matching. Captures such as `r"Hello, (.*)"($name)` are runtime-sensitive and need tests.
+
+Grit state can contain lists (`[1, 2]`), maps (`{ key: value }`), indexed values (`$items[0]`, `$items[-1]`), assignments (`=`), and accumulations (`+=`). These are useful for complex standalone patterns but often unnecessary for lint rules.
+
+Reusable patterns, predicates, and functions must be defined before the root query. Functions produce replacement values rather than general structural patterns. Common standalone built-ins include `lowercase`, `uppercase`, `capitalize`, `trim`, `join`, `split`, `length`, `distinct`, `text`, `resolve`, and `log`. Availability and named argument signatures differ by runtime/version; check the target's documentation before using them.
+
+## Direct syntax-tree nodes are runtime-specific
+
+Standalone Grit commonly exposes Tree-sitter-style names:
 
 ```grit
-$value <: r"#[0-9a-fA-F]+"
+call_expression(function = $callee)
 ```
 
-Regex matches the entire node/value, so use `.*` when intentionally matching a substring. Standalone Grit uses Rust regex syntax. Prefer structural snippets over regex when possible.
-
-Capture groups may bind variables in supported runtimes:
-
-```grit
-$message <: r"Hello, (.*)"($name)
-```
-
-## Direct syntax-tree nodes
-
-Use direct nodes only after inspecting the relevant syntax tree.
-
-Biome uses PascalCase names and named fields:
+Biome exposes PascalCase CST names and Biome field names:
 
 ```grit
 engine biome(1.0)
@@ -204,56 +126,31 @@ language js(typescript, jsx)
 JsConditionalExpression(consequent = $value)
 ```
 
-Standalone Grit commonly uses Tree-sitter-style lowercase names:
+Never translate names mechanically. Inspect the target syntax tree or matching grammar.
 
-```grit
-engine marzano(0.1)
-language js
+## Standalone-only workflow features
 
-call_expression(function = $callee, arguments = $args)
+Treat `sequential`, `multifile`, `file`, `range`, `$filename`, `$new_files`, JavaScript-implemented functions, and standard-library helper patterns as standalone features unless another runtime explicitly supports and tests them.
+
+Executable Markdown patterns live under `.grit/patterns`. Run:
+
+```bash
+grit --version
+grit patterns test --filter=<pattern-name>
+grit apply <pattern-name> <narrow-path> --dry-run
 ```
 
-Names and fields are not portable between engines. Never guess them.
+Per Grit's documented Markdown format, one sample block must match; two blocks are before/after; two identical blocks are a negative rewrite case.
 
-## Definitions and scoping
+## Official references
 
-Reusable patterns establish a local scope:
-
-```grit
-pattern console_method_to_info($method) {
-    `console.$method($message)` => `console.info($message)`
-}
-
-console_method_to_info(method = `log`)
-```
-
-Metavariables unify within their scope. A `bubble` introduces a fresh scope so repeated descendant matches may bind different values:
-
-```grit
-`function $name() { $body }` where {
-    $body <: contains bubble($name) {
-        `console.log($message)` => `console.info($name, $message)`
-    }
-}
-```
-
-Root patterns are commonly auto-wrapped in a file/contains/bubble scope by the runtime. Explicit `file(...)`, `sequential`, and `multifile` patterns alter that behavior; see [refactors.md](refactors.md).
-
-## Built-ins
-
-Frequently useful standalone built-ins include:
-
-```grit
-lowercase(string = $value)
-uppercase(string = $value)
-capitalize(string = $value)
-trim(string = $value, trim_chars = " ")
-join(list = $items, separator = ", ")
-split(string = $value, separator = "_")
-length(target = $items)
-distinct(list = $items)
-text(target = $node)
-log(message = "debug", variable = $node)
-```
-
-Built-ins are replacement values or predicates according to their signature; they are not all implemented by every runtime. Consult the target version rather than assuming availability.
+- [GritQL language overview](https://docs.grit.io/language/overview)
+- [Language tutorial](https://docs.grit.io/tutorials/gritql)
+- [Syntax reference](https://docs.grit.io/language/syntax)
+- [Patterns](https://docs.grit.io/language/patterns)
+- [Conditions](https://docs.grit.io/language/conditions)
+- [Pattern modifiers](https://docs.grit.io/language/modifiers)
+- [Bubble and scoping](https://docs.grit.io/language/bubble)
+- [Functions](https://docs.grit.io/language/functions)
+- [Target languages](https://docs.grit.io/language/target-languages)
+- [Testing GritQL](https://docs.grit.io/guides/testing)
