@@ -1,0 +1,33 @@
+{
+	"name": "unofficial-gritql-skill",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Unofficial Agent Skill for GritQL, Biome plugins, structural search, and deterministic refactors.",
+	"type": "module",
+	"license": "MIT",
+	"keywords": [
+		"agent-skill",
+		"biome",
+		"codemod",
+		"gritql",
+		"pi-package",
+		"refactoring"
+	],
+	"engines": {
+		"node": ">=18"
+	},
+	"scripts": {
+		"doctor": "node skills/gritql/scripts/gritql-doctor.mjs .",
+		"test": "npm run test:skill && npm run test:biome",
+		"test:skill": "node tests/validate-skill.mjs",
+		"test:biome": "node tests/biome-smoke.mjs"
+	},
+	"pi": {
+		"skills": [
+			"./skills"
+		]
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.5"
+	}
+}

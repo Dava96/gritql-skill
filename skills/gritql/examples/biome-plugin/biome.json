@@ -1,0 +1,6 @@
+{
+  "plugins": ["./use-console-info.grit"],
+  "linter": {
+    "enabled": true
+  }
+}
