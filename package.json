@@ -1,6 +1,6 @@
 {
   "name": "unofficial-gritql-skill",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "An unofficial agent skill for GritQL and Biome linter plugins",
   "repository": {
@@ -13,7 +13,9 @@
     "version": "changeset version"
   },
   "pi": {
-    "skills": ["./skills"]
+    "skills": [
+      "./skills"
+    ]
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
