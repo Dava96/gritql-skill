@@ -1,8 +1,0 @@
-{
-  "film_stock": { "film_stock": "Delta 3200" },
-  "groups": [
-    { "film_stock": [1, 2, 3] },
-    { "preferred_film_stock": true }
-  ],
-  "note": "film_stock"
-}

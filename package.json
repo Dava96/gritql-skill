@@ -1,42 +1,23 @@
 {
-	"name": "unofficial-gritql-skill",
-	"version": "0.1.0",
-	"private": true,
-	"description": "Unofficial Agent Skill for GritQL queries, rewrites, and Biome linter plugins.",
-	"type": "module",
-	"license": "MIT",
-	"keywords": [
-		"agent-skill",
-		"biome",
-		"codemod",
-		"gritql",
-		"linter-plugin",
-		"pi-package",
-		"refactoring"
-	],
-	"engines": {
-		"node": ">=24"
-	},
-	"scripts": {
-		"test": "npm run test:skill && npm run test:biome",
-		"test:skill": "node tests/validate-skill.mjs",
-		"test:biome": "node tests/biome-smoke.mjs",
-		"eval:prepare": "node evals/biome-monorepo/prepare.mjs",
-		"eval:run": "node evals/biome-monorepo/run-pair.mjs",
-		"eval:run:per-case": "node evals/biome-monorepo/run-per-case.mjs",
-		"eval:score": "node evals/biome-monorepo/score.mjs",
-		"eval:cleanup": "node evals/biome-monorepo/cleanup.mjs",
-		"standalone:prepare": "node evals/standalone/prepare.mjs",
-		"standalone:run": "node evals/standalone/run-pair.mjs",
-		"standalone:score": "node evals/standalone/score.mjs",
-		"standalone:cleanup": "node evals/standalone/cleanup.mjs"
-	},
-	"pi": {
-		"skills": [
-			"./skills"
-		]
-	},
-	"devDependencies": {
-		"@biomejs/biome": "2.5.5"
-	}
+  "name": "unofficial-gritql-skill",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An unofficial agent skill for GritQL and Biome linter plugins",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dava96/gritql-skill"
+  },
+  "license": "MIT",
+  "scripts": {
+    "changeset": "changeset",
+    "version": "changeset version"
+  },
+  "pi": {
+    "skills": ["./skills"]
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.30.0"
+  },
+  "packageManager": "npm@10.9.4"
 }

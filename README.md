@@ -1,73 +1,38 @@
 # Unofficial GritQL Skill
 
-> **Unofficial community project.** This repository is not affiliated with, maintained by, sponsored by, or endorsed by Biome, GritQL, Grit.io, Honeycomb, or their maintainers.
+[![skills.sh](https://skills.sh/b/Dava96/gritql-skill)](https://skills.sh/Dava96/gritql-skill)
 
-An [Agent Skills](https://agentskills.io/) package for:
+An agent skill for writing and testing standalone GritQL patterns, structural rewrites, and Biome linter plugins.
 
-- writing and debugging GritQL structural queries and rewrites;
-- authoring standalone Grit/Marzano patterns and fixture tests;
-- building Biome GritQL linter plugins with custom diagnostics;
-- validating Biome plugin scope, suppressions, and safe/unsafe fixes.
-
-The skill emphasizes runtime differences and executable fixtures so agents do not mix standalone Tree-sitter patterns with Biome CST nodes or claim an untested query works.
+> This is an unofficial community project. It is not affiliated with or endorsed by Biome, Grit, Grit.io, Honeycomb, or their maintainers.
 
 ## Install
 
-### Pi
+```bash
+npx skills@latest add Dava96/gritql-skill
+```
 
-After publication:
+With Pi:
 
 ```bash
-pi install git:github.com/<owner>/gritql-skill
+pi install git:github.com/Dava96/gritql-skill
 ```
 
-Or copy `skills/gritql` to `~/.pi/agent/skills/gritql`.
+Or copy [`skills/gritql`](skills/gritql) into your agent's skills directory.
 
-Other Agent Skills-compatible tools can copy or link the same directory into their skills location.
+## What it helps with
 
-## Use
-
-Pi can load the skill automatically or explicitly:
-
-```text
-/skill:gritql
-```
-
-Example requests:
-
-```text
-Write and test a GritQL rewrite for this API migration.
-```
-
-```text
-Build a Biome plugin that reports this project-specific TypeScript pattern.
-```
-
-```text
-Debug why this standalone Grit pattern works in Marzano but not as a Biome plugin.
-```
-
-## Development
-
-The active Node.js LTS release (currently Node.js 24+) is required for repository tests:
-
-```bash
-npm install
-npm test
-```
-
-The smoke test runs the bundled plugin against the pinned development version of Biome. Target projects must still validate with their own installed version.
+- choosing the correct standalone Grit or Biome runtime;
+- writing patterns without hard-coding the example;
+- testing positive cases, near misses, replay, and second-pass safety;
+- creating scoped Biome diagnostics and fixes;
+- avoiding broad or unverified rewrites.
 
 ## Evaluation
 
-We give the same model the same tasks twice: once without the skill and once with it. Both runs start with the same files and tools. We then check the final output, rerun the saved migrations to prove they work, and make sure unrelated files were not changed.
+We gave the same model the same tasks with and without the skill, then checked the output and reran the saved migrations.
 
-There are two separate test sets:
-
-- [Biome plugins](evals/biome-monorepo/README.md): ten TypeScript, TSX, CSS, and JSON migrations using Biome 2.5.0.
-- [Standalone Grit](evals/standalone/README.md): eight migrations using Grit 0.1.1, including unseen examples that catch overly specific patterns.
-
-| Test | Model | Without skill | With skill | Change |
+| Test | Model | Without | With | Change |
 |---|---|---:|---:|---:|
 | Biome, one session | GPT-5.6 Sol | 90 | 100 | +10 |
 | Biome, one session | GPT-5.4 Mini | 69 | 88 | +19 |
@@ -75,24 +40,14 @@ There are two separate test sets:
 | Biome, early one-session test | GPT-5.3 Codex Spark | 16 | 16 | 0 |
 | Standalone Grit, fresh session per task | GPT-5.4 Mini | 81 | 96 | +15 |
 
-Each row is one paired run, not an average. The tests became stricter as they exposed new failure modes, so these results are practical evidence rather than a formal benchmark.
+These are individual paired runs, not benchmark averages. Later runs used stricter replay and unseen-example checks after earlier runs exposed those failure modes.
 
-## Layout
+## Documentation
 
-```text
-skills/gritql/
-├── SKILL.md
-├── examples/
-└── references/
-tests/
-```
-
-## Primary documentation
-
-- [GritQL language overview](https://docs.grit.io/language/overview)
+- [GritQL language](https://docs.grit.io/language/overview)
 - [Biome linter plugins](https://biomejs.dev/linter/plugins/)
 - [Biome GritQL reference](https://biomejs.dev/reference/gritql/)
 
 ## License
 
-MIT. Upstream project names and trademarks belong to their respective owners.
+MIT. Upstream names and trademarks belong to their respective owners.
