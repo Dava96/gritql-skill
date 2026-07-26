@@ -4,12 +4,12 @@ tags: [migration, api]
 
 # Rename a deprecated client method
 
-Replace direct calls to a known client object's deprecated one-argument method.
+Replace direct calls to a known client object's deprecated method while preserving its complete argument list.
 
 ```grit
 language js
 
-`client.oldMethod($argument)` => `client.newMethod($argument)`
+`client.oldMethod($arguments)` => `client.newMethod($arguments)`
 ```
 
 ## Rewrites a direct call
@@ -32,21 +32,33 @@ client.oldMethod(createValue());
 client.newMethod(createValue());
 ```
 
+## Preserves zero arguments
+
+```typescript
+client.oldMethod();
+```
+
+```typescript
+client.newMethod();
+```
+
+## Preserves multiple arguments
+
+```typescript
+client.oldMethod(first, second);
+```
+
+```typescript
+client.newMethod(first, second);
+```
+
 ## Leaves another object untouched
 
 ```typescript
 unrelated.oldMethod(value);
 ```
 
-```typescript
-unrelated.oldMethod(value);
-```
-
 ## Leaves already migrated code untouched
-
-```typescript
-client.newMethod(value);
-```
 
 ```typescript
 client.newMethod(value);

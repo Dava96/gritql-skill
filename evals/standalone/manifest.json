@@ -1,0 +1,72 @@
+{
+	"branches": {
+		"withSkill": "eval/gritql-standalone-with-skill",
+		"withoutSkill": "eval/gritql-standalone-without-skill"
+	},
+	"cases": [
+		{
+			"id": "01",
+			"title": "Bare Film Development",
+			"difficulty": 1,
+			"path": "cases/01-verb-first-film.ts",
+			"pattern": "rename_develop_film.md",
+			"name": "rename_develop_film"
+		},
+		{
+			"id": "02",
+			"title": "Object.assign Retirement",
+			"difficulty": 2,
+			"path": "cases/02-object-assign.ts",
+			"pattern": "retire_object_assign.md",
+			"name": "retire_object_assign"
+		},
+		{
+			"id": "03",
+			"title": "Zero-Delay Timeout",
+			"difficulty": 2,
+			"path": "cases/03-zero-timeout.ts",
+			"pattern": "replace_zero_timeout.md",
+			"name": "replace_zero_timeout"
+		},
+		{
+			"id": "04",
+			"title": "Telemetry Event Objects",
+			"difficulty": 3,
+			"path": "cases/04-telemetry.ts",
+			"pattern": "migrate_telemetry_events.md",
+			"name": "migrate_telemetry_events"
+		},
+		{
+			"id": "05",
+			"title": "Darkroom Fluent Chain",
+			"difficulty": 4,
+			"path": "cases/05-darkroom.ts",
+			"pattern": "collapse_darkroom_chain.md",
+			"name": "collapse_darkroom_chain"
+		},
+		{
+			"id": "06",
+			"title": "Python Request Chaperone",
+			"difficulty": 2,
+			"path": "cases/06-python-chaperone.py",
+			"pattern": "chaperone_python_requests.md",
+			"name": "chaperone_python_requests"
+		},
+		{
+			"id": "07",
+			"title": "Nested JSON Emulsion Keys",
+			"difficulty": 3,
+			"path": "cases/07-json-emulsion.json",
+			"pattern": "rename_json_emulsion.md",
+			"name": "rename_json_emulsion"
+		},
+		{
+			"id": "08",
+			"title": "FilmBadge JSX Attribute",
+			"difficulty": 4,
+			"path": "cases/08-film-stock.tsx",
+			"pattern": "rename_film_badge_stock.md",
+			"name": "rename_film_badge_stock"
+		}
+	]
+}

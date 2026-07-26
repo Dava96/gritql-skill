@@ -38,6 +38,9 @@ Reintroduce one item at a time:
 | No matches | Wrong target language/flavor; snippet invalid in that syntax position; named variables unintentionally unified; zero/one/many list behavior; overrestrictive `where`; wrong CST dialect. |
 | Too many matches | Add structural callee/source/context evidence; use `within`, `contains`, or `not`; narrow plugin includes; reconsider whether types or symbol identity are required. |
 | Search matches, plugin is silent | Plugin not configured; includes exclude fixture; successful branch does not call `register_diagnostic()`; span unbound in an `or` arm; `lint/plugin` suppression active. |
+| “Checked 0 files” or zero plugin messages | Treat this as failure, not a clean result. Use an explicit positive file glob such as `**/fixtures/invalid.ts`, run that exact file, and keep changing scope until the known violation reports. |
+| One bad plugin blocks all plugins | Configure and validate one rule at a time. Remove later rules, fix the first compile error, prove its diagnostic and rewrite, then add the next. |
+| Write changed unrelated files | Stop immediately. Never run a root-wide write. Restore from the pre-write copy, target only the exact fixture, and isolate or skip unrelated built-in fixes. |
 | Wrong span | Bind the smallest source, attribute, call, or value users should act on with `as` or a verified node field. |
 | Fix is not applied | Safe fixes require `fix_kind = "safe"` and `--write`; unsafe/unclassified fixes require `--write --unsafe`; the rewrite must share the diagnostic's successful path. |
 | Malformed output | Rewrite a smaller binding; preserve required metavariables; test comments, precedence, optional syntax, and empty/multiple list elements. |
@@ -58,7 +61,7 @@ language js
 }
 ```
 
-Run it against a dedicated fixture containing `debugger`. If it fails, fix config, includes, language, or compilation before restoring the complex query.
+Run it against a dedicated fixture containing `debugger` and require exactly one temporary message. If it reports zero, fix config, includes, language, or compilation before restoring the complex query. Never continue to writes while the load probe is silent.
 
 ## Rewrite safety
 

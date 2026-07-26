@@ -40,7 +40,7 @@ Every independently successful lint-rule branch must reach `register_diagnostic(
 }
 ```
 
-Without `includes`, the plugin runs on every supported file Biome processes. With it, a file must match a positive glob and no negated glob. Paths follow Biome's glob rules. Plugin diagnostics can be suppressed with `// biome-ignore lint/plugin: reason`; test this when suppression is part of rollout.
+Without `includes`, the plugin runs on every supported file Biome processes. With it, a file must match a positive glob and no negated glob. Paths follow the installed Biome version's glob rules. Prefer a concrete positive file glob such as `**/fixtures/invalid.ts` or `**/fixtures/*.ts`. Do not assume an exact repository-relative path or trailing `directory/**` selects direct files: run the violating file and prove the expected diagnostic count. “Checked 0 files” or zero plugin diagnostics means the scope is not validated. Plugin diagnostics can be suppressed with `// biome-ignore lint/plugin: reason`; test this when suppression is part of rollout.
 
 ## Plugin API
 
@@ -53,7 +53,7 @@ Without `includes`, the plugin runs on every supported file Biome processes. Wit
 | `severity` | no | `hint`, `info`, `warn`, or `error`; defaults to `error`. |
 | `fix_kind` | no | `safe` or `unsafe`; a rewrite defaults to unsafe. |
 
-A fix must register its diagnostic and rewrite on the same successful path:
+A fix must register its diagnostic and rewrite on the same successful path. Use the canonical shape below, with the rewrite inside `where`, rather than inventing another operator layout. Never put two bare root rules one after another; use `or { ... }` for alternatives:
 
 ```grit
 `console.log($arguments)` as $call where {
@@ -114,31 +114,67 @@ language css
 }
 ```
 
-JSON snippets and CST names are version-sensitive. Start with the documented snippet syntax, then inspect the target runtime's CST when it does not express the needed match.
+JSON snippets and CST names are version-sensitive. Start with the documented snippet syntax, then inspect the target runtime's CST when it does not express the needed match. For example, after verifying these names in the target version, a focused key rewrite can use:
+
+```grit
+engine biome(1.0)
+language json
+
+JsonMember(name = $name) where {
+    $name <: r"\"old_key\"",
+    register_diagnostic(
+        span = $name,
+        message = "Rename old_key to new_key.",
+        fix_kind = "unsafe"
+    ),
+    $name => `"new_key"`
+}
+```
+
+For JSX, rewrite the focused attribute name while constraining the attribute with a verified ancestor snippet. This Biome 2.5 form preserves attribute order and spreads:
+
+```grit
+JsxAttribute(name = $name) as $attribute where {
+    $name <: `filmStock`,
+    $attribute <: within `<FilmBadge $... />`,
+    register_diagnostic(
+        span = $name,
+        message = "Rename filmStock to emulsion.",
+        fix_kind = "unsafe"
+    ),
+    $name => `emulsion`
+}
+```
+
+Test self-closing and paired elements separately when both are in scope. Do not assume an inline direct-node ancestor such as `$attribute <: within JsxSelfClosingElement(...)` works merely because it compiles: in Biome 2.5 it can yield zero plugin diagnostics. The required nonzero lint gate is authoritative.
 
 ## Validation loop
 
-Use the project's local launcher and existing Biome version. For example:
+Use the project's local launcher and finish one plugin before configuring the next:
 
 ```bash
 pnpm exec biome --version
-pnpm exec biome search '`console.log($arguments)`' path/to/fixtures
+pnpm exec biome search '`console.log($arguments)`' path/to/invalid.ts
 pnpm exec biome lint path/to/invalid.ts --colors=off --max-diagnostics=none
-pnpm exec biome lint path/to/valid.ts --colors=off --max-diagnostics=none
-pnpm exec biome lint --write path/to/safe-fix-copy.ts
-pnpm exec biome lint --write --unsafe path/to/unsafe-fix-copy.ts
+cp path/to/invalid.ts path/to/write-copy.ts
+pnpm exec biome lint --write --unsafe path/to/write-copy.ts --colors=off --max-diagnostics=none
+pnpm exec biome lint --write --unsafe path/to/write-copy.ts --colors=off --max-diagnostics=none
 ```
 
-Validate in this order:
+Some Biome versions accept `--only=plugin` to isolate plugins from built-in rules; test the installed CLI before relying on it. Otherwise mutate only a copy, inspect every changed line, and skip or restore unrelated built-in fixes.
 
-1. Pure match count on violating and near-miss fixtures.
-2. Exact plugin message and useful span—not just nonzero exit status.
-3. Zero, one, and multiple list elements when cardinality matters.
-4. Include/exclude globs and suppression when used.
-5. Rewrite output on a copy with the appropriate write flag.
-6. Parsing, formatting, type checking, project tests, and an idempotent second pass.
+Gate each plugin in this order:
 
-Do not silently download another Biome release to validate a project plugin. If the local binary is unavailable, report the plugin as not runtime-validated.
+1. Record the local version and target language.
+2. Run the pure query on positive and near-miss fixtures.
+3. Configure only this plugin with an explicit file glob.
+4. Run diagnostic-only lint and require the exact nonzero message count and focused span. Zero processed files, zero plugin messages, or any compile error is a hard stop.
+5. Test zero/one/many list elements where relevant.
+6. Apply the rewrite only to a copy; compare exact output and confirm no unrelated built-in fix ran.
+7. Restore a fresh input copy and prove the retained plugin reproduces the output without manual edits.
+8. Run a second write pass, parsing, type checks, and project tests before starting another rule.
+
+Never use a repository root as the path to `check --write`, `format --write`, or `lint --write`. Do not silently download another Biome release. If the local binary is unavailable, report **not runtime-validated**.
 
 ## Official references
 

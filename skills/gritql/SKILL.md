@@ -28,32 +28,47 @@ Inspect the target project's version, configuration, nearby patterns, target fil
 1. **State the contract.** Record runtime and version, target language/flavor, examples that must match, near misses that must not match, and the intended diagnostic or rewrite.
 2. **Check tool fit.** Avoid syntax-only GritQL when correctness needs types, symbol resolution, control flow, or data flow. For a Biome policy, prefer an existing built-in rule when it already fits.
 3. **Create fixtures.** Include formatting variants, repeated matches, an already-correct case, and one near miss differing by a single structural fact. Add zero/one/many-element cases when matching argument or item lists.
-4. **Grow the query.** Start with a backtick snippet, add metavariables, then `where` constraints and traversal. Use direct syntax-tree nodes only after discovering their exact runtime-specific names and fields. Add rewrites last.
+4. **Grow the query.** Start with a snippet and metavariables; never hard-code fixture literals or add one arm per example. Add constraints, verified direct nodes, and rewrites last.
 5. **Execute narrowly.** Run the pure query on fixtures, then diagnostics, then any rewrite on a copy. Compare exact output and run a second pass to check idempotence.
 
 If the required runner is unavailable, say **not runtime-validated**, give the exact command to run, and do not claim the pattern works.
 
 ## GritQL and standalone pattern requirements
 
-- Declare the target language and use the target Grit version's syntax and node grammar.
-- Put reusable executable Markdown patterns under `.grit/patterns` and run `grit patterns test`.
-- In Grit Markdown tests, one code block is a positive search case; two blocks are input/output; two identical blocks encode a negative rewrite case.
+- Declare the target language and use its installed node grammar. Never match a whole fixture or `program` merely to encode local rewrites.
+- In `.grit/patterns/*.md`, the filename stem is the pattern name: put the root query directly in the `grit` fence, do not redefine that name, and run `grit patterns test`.
+- Markdown sample semantics differ across Grit releases and documentation. Probe the installed test runner with a tiny positive and negative case before encoding fixtures.
 - Before applying a codemod broadly, inspect matches or a dry run, narrow the path, review the diff, run project checks, and rerun for idempotence.
 - Treat `multifile`, `$new_files`, JavaScript functions, and standard-library helpers as runtime-specific features rather than universal GritQL.
 
 See [examples/standalone-refactor](examples/standalone-refactor/README.md).
 
-## Biome integration requirements
+## Biome plugin hard gates
 
-- Confirm the target is JavaScript/TypeScript, CSS, or JSON, the languages currently documented by Biome.
-- Every successful lint-rule path must call `register_diagnostic()` with a bound `span` and a `message`.
-- Use `severity = "hint" | "info" | "warn" | "error"` only; it defaults to `error`.
-- A rewrite without `fix_kind` is unsafe. `--write` applies safe fixes; `--write --unsafe` also applies unsafe fixes.
-- Mark a fix safe only when the matched rewrite cannot change intended behavior. If uncertain, use `unsafe` or omit the fix.
-- Develop matching with `biome search`, but validate diagnostics and fixes with `biome lint` or `biome check`.
-- Scope rollout with `plugins[].includes` when the policy is not repository-wide, and test suppression with `lint/plugin` when relevant.
+Finish one rule end-to-end before starting another. Never batch unvalidated plugins: one compile failure can block every configured rule.
 
-See the runtime-tested integration fixture in [examples/biome-plugin](examples/biome-plugin/README.md).
+Every rewrite branch must use this shape, with the rewrite **inside the same `where` block**:
+
+```grit
+`pattern` as $match where {
+    register_diagnostic(
+        span = $match,
+        message = "Actionable message.",
+        severity = "warn",
+        fix_kind = "unsafe"
+    ),
+    $match => `replacement`
+}
+```
+
+- Declare the language. Keep exactly one root query; combine alternatives with `or { ... }`.
+- Default fixes to `unsafe`. Use `safe` only with a stated syntax-level proof that behavior cannot change.
+- Scope each plugin to an actual file glob such as `**/fixtures/invalid.ts`. Do not assume `path/**` includes direct files.
+- Run `biome lint` on the exact violating fixture before any write and require the expected **nonzero** diagnostic count. “Checked 0 files,” zero plugin diagnostics, or a compile error is failure—stop and fix it.
+- Never manually edit the intended output to simulate success. Apply the plugin to a copy, compare exact output, restore the original input, replay the plugin, and run a second pass.
+- Never run repository-wide `biome check --write`, `biome format --write`, or `biome lint --write`. Mutating commands must name only copied fixtures or an explicitly approved narrow path.
+
+See [references/biome.md](references/biome.md) and the runtime-tested [example](examples/biome-plugin/README.md).
 
 ## Completion checklist
 

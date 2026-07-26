@@ -32,6 +32,26 @@ assert.match(frontmatter.description, /GritQL queries/i);
 assert.match(frontmatter.description, /Biome linter plugins/i);
 assert.match(frontmatter.description, /register_diagnostic/);
 assert.equal(frontmatter.license, "MIT");
+assert.match(skill, /Finish one rule end-to-end before starting another/);
+assert.match(skill, /Checked 0 files/);
+assert.match(skill, /Never run repository-wide `biome check --write`/);
+assert.match(skill, /filename stem is the pattern name/);
+assert.match(skill, /Never match a whole fixture/);
+
+const biomeReference = readFileSync(
+	join(skillRoot, "references", "biome.md"),
+	"utf8",
+);
+assert.match(biomeReference, /--only=plugin/);
+assert.match(biomeReference, /\*\*\/fixtures\/invalid\.ts/);
+assert.match(biomeReference, /within `<FilmBadge \$\.\.\. \/>`/);
+assert.match(biomeReference, /prove the retained plugin reproduces the output/);
+const languageReference = readFileSync(
+	join(skillRoot, "references", "language-core.md"),
+	"utf8",
+);
+assert.match(languageReference, /filename stem is the pattern name/);
+assert.match(languageReference, /Grit 0\.1\.1 runner/);
 
 const readme = readFileSync(readmePath, "utf8");
 assert.match(readme, /Unofficial GritQL Skill/);

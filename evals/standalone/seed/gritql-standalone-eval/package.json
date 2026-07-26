@@ -1,0 +1,8 @@
+{
+	"name": "gritql-standalone-eval",
+	"private": true,
+	"version": "0.0.0",
+	"devDependencies": {
+		"@getgrit/cli": "0.1.0-alpha.1743007075"
+	}
+}

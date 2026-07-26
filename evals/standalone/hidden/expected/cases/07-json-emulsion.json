@@ -1,0 +1,8 @@
+{
+  "emulsion": { "emulsion": "Delta 3200" },
+  "groups": [
+    { "emulsion": [1, 2, 3] },
+    { "preferred_film_stock": true }
+  ],
+  "note": "film_stock"
+}

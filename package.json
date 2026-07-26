@@ -15,12 +15,21 @@
 		"refactoring"
 	],
 	"engines": {
-		"node": ">=18"
+		"node": ">=24"
 	},
 	"scripts": {
 		"test": "npm run test:skill && npm run test:biome",
 		"test:skill": "node tests/validate-skill.mjs",
-		"test:biome": "node tests/biome-smoke.mjs"
+		"test:biome": "node tests/biome-smoke.mjs",
+		"eval:prepare": "node evals/biome-monorepo/prepare.mjs",
+		"eval:run": "node evals/biome-monorepo/run-pair.mjs",
+		"eval:run:per-case": "node evals/biome-monorepo/run-per-case.mjs",
+		"eval:score": "node evals/biome-monorepo/score.mjs",
+		"eval:cleanup": "node evals/biome-monorepo/cleanup.mjs",
+		"standalone:prepare": "node evals/standalone/prepare.mjs",
+		"standalone:run": "node evals/standalone/run-pair.mjs",
+		"standalone:score": "node evals/standalone/score.mjs",
+		"standalone:cleanup": "node evals/standalone/cleanup.mjs"
 	},
 	"pi": {
 		"skills": [

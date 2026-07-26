@@ -75,7 +75,7 @@ A shared `where` after `or` may only reference variables bound by every arm.
 }
 ```
 
-Standalone Grit auto-wraps ordinary root patterns so they can match repeatedly in a file. Explicit `file`, `sequential`, or `multifile` patterns change scoping and execution. Do not assume identical scoping in another runtime without fixtures.
+Standalone Grit auto-wraps ordinary root patterns so they can match repeatedly in a file. Explicit `file`, `sequential`, or `multifile` patterns change scoping and execution. Do not assume identical scoping in another runtime without fixtures. Matching an entire `program` or copying a complete fixture into a query is valid only for a genuinely file-level contract, not as a shortcut for local rewrites.
 
 ## Rewrites
 
@@ -132,7 +132,9 @@ Never translate names mechanically. Inspect the target syntax tree or matching g
 
 Treat `sequential`, `multifile`, `file`, `range`, `$filename`, `$new_files`, JavaScript-implemented functions, and standard-library helper patterns as standalone features unless another runtime explicitly supports and tests them.
 
-Executable Markdown patterns live under `.grit/patterns`. Run:
+Executable Markdown patterns live under `.grit/patterns`. The Markdown filename stem is the pattern name; the fenced `grit` block contains the root query directly. Do not wrap it in `local pattern <same_name>()`, which makes the pattern attempt to define itself.
+
+Run:
 
 ```bash
 grit --version
@@ -140,7 +142,7 @@ grit patterns test --filter=<pattern-name>
 grit apply <pattern-name> <narrow-path> --dry-run
 ```
 
-Per Grit's documented Markdown format, one sample block must match; two blocks are before/after; two identical blocks are a negative rewrite case.
+Markdown sample conventions are version-sensitive. Current documentation says one block must match and two identical blocks are negative, while the Grit 0.1.1 runner interprets a one-block rewrite sample as “must not match” and two identical blocks as expected matched output. Execute a tiny probe under the installed runner before encoding a suite; its behavior is authoritative.
 
 ## Official references
 

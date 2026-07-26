@@ -1,0 +1,17 @@
+{
+    "emulsion": "Kodak Gold 200",
+    "film_stock_note": "film_stock must remain in this value",
+    "preferred_film_stock": "Phoenix II",
+    "laboratory": {
+        "emulsion": "Ilford HP5 Plus",
+        "shelves": [
+            {
+                "emulsion": "Kentmere 400",
+                "label": "film_stock"
+            },
+            {
+                "format": "120"
+            }
+        ]
+    }
+}

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+	cpSync,
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -110,12 +117,73 @@ try {
 	]);
 	assert.equal(search.status, 0, output(search));
 	assert.match(output(search), /console\.log/);
+
+	const jsxMessage = "Rename filmStock to emulsion.";
+	writeFileSync(
+		join(fixture, "rename-film-stock.grit"),
+		`engine biome(1.0)
+language js(typescript, jsx)
+
+JsxAttribute(name = $name) as $attribute where {
+    $name <: \`filmStock\`,
+    $attribute <: within \`<FilmBadge $... />\`,
+    register_diagnostic(
+        span = $name,
+        message = "${jsxMessage}",
+        fix_kind = "unsafe"
+    ),
+    $name => \`emulsion\`
+}
+`,
+	);
+	const configPath = join(fixture, "biome.json");
+	const config = JSON.parse(readFileSync(configPath, "utf8"));
+	config.plugins.push({
+		path: "./rename-film-stock.grit",
+		includes: ["**/*.tsx"],
+	});
+	writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+	const jsxInput = `export const shelf = (
+    <section>
+        <FilmBadge filmStock="one" />
+        <FilmBadge size="small" filmStock={selected} compact />
+        <FilmBadge {...defaults} filmStock={metadata.stock} />
+        <OtherBadge filmStock="near-miss" />
+    </section>
+);\n`;
+	const jsxExpected = jsxInput
+		.replaceAll("<FilmBadge filmStock", "<FilmBadge emulsion")
+		.replace('size="small" filmStock', 'size="small" emulsion')
+		.replace("{...defaults} filmStock", "{...defaults} emulsion");
+	const jsxPath = join(fixture, "actual.tsx");
+	writeFileSync(jsxPath, jsxInput);
+	const jsxLint = runBiome([
+		"lint",
+		"actual.tsx",
+		"--colors=off",
+		"--max-diagnostics=none",
+	]);
+	assert.equal(
+		(output(jsxLint).match(new RegExp(escapeRegex(jsxMessage), "g")) ?? [])
+			.length,
+		3,
+		output(jsxLint),
+	);
+	const jsxWrite = runBiome([
+		"lint",
+		"--write",
+		"--unsafe",
+		"actual.tsx",
+		"--colors=off",
+	]);
+	assert.equal(jsxWrite.status, 0, output(jsxWrite));
+	assert.equal(readFileSync(jsxPath, "utf8"), jsxExpected);
 } finally {
 	rmSync(fixture, { recursive: true, force: true });
 }
 
 console.log(
-	"Biome 2.5.5 diagnostics, argument cardinality, negative fixtures, includes, suppression, unsafe writes, idempotence, and search passed.",
+	"Biome 2.5.5 diagnostics, argument cardinality, JSX ancestors, negative fixtures, includes, suppression, unsafe writes, idempotence, and search passed.",
 );
 
 function runBiome(args) {

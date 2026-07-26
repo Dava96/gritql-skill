@@ -1,6 +1,6 @@
 # Standalone Grit refactor fixture
 
-This example uses Grit's executable Markdown pattern format. The two identical blocks in each negative case are intentional: Grit interprets them as unchanged before/after output.
+This example uses Grit's executable Markdown pattern format as interpreted by the Grit 0.1.1 runner: each one-block negative case must remain unmatched. Markdown sample semantics have differed across releases and documentation, so probe the installed target runner before copying this convention.
 
 With a compatible standalone Grit CLI, run from this directory:
 
